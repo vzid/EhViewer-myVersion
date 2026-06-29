@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyGridScope
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -64,6 +65,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.viewModelScope
 import androidx.paging.Pager
 import androidx.paging.PagingConfig
@@ -131,6 +133,7 @@ import com.hippo.ehviewer.ktbuilder.executeIn
 import com.hippo.ehviewer.ktbuilder.imageRequest
 import com.hippo.ehviewer.ui.GalleryInfoBottomSheet
 import com.hippo.ehviewer.ui.MainActivity
+import com.hippo.ehviewer.ui.PreviewReaderReturnPosition
 import com.hippo.ehviewer.ui.confirmRemoveDownload
 import com.hippo.ehviewer.ui.destinations.GalleryCommentsScreenDestination
 import com.hippo.ehviewer.ui.getFavoriteIcon
@@ -212,6 +215,8 @@ fun GalleryDetailContent(
         else -> error("Invalid DownloadState!!!")
     }
     var previewTapSelectMode by rememberSaveable(galleryInfo.gid) { mutableStateOf(false) }
+    var pendingPreviewScrollPage by rememberSaveable(galleryInfo.gid) { mutableIntStateOf(-1) }
+    val previewGridState = rememberLazyGridState()
     val selectedPreviewPages by rememberInVM(galleryInfo.gid) {
         EhDB.getPreviewSelectionPagesFlow(galleryInfo.gid)
     }.collectAsState(emptyList())
@@ -253,7 +258,10 @@ fun GalleryDetailContent(
         if (previewTapSelectMode) {
             togglePreviewSelection(index)
         } else {
-            galleryDetail?.let { navToReader(it.galleryInfo, index) }
+            galleryDetail?.let {
+                PreviewReaderReturnPosition.start(it.gid, index)
+                navToReader(it.galleryInfo, index, trackPreviewReturn = true)
+            }
         }
     }
     fun onPreviewLongClick(index: Int) {
@@ -348,10 +356,25 @@ fun GalleryDetailContent(
     }
 
     val previews = galleryDetail?.collectPreviewItems()
+    val previewItemCount = previews?.itemCount ?: 0
+    LifecycleResumeEffect(galleryInfo.gid) {
+        PreviewReaderReturnPosition.consume(galleryInfo.gid)?.let {
+            pendingPreviewScrollPage = it
+        }
+        onPauseOrDispose {}
+    }
+    LaunchedEffect(pendingPreviewScrollPage, previewItemCount, hasSelectedPreviewPages) {
+        if (pendingPreviewScrollPage >= 0 && previewItemCount > 0) {
+            val page = pendingPreviewScrollPage.coerceIn(0, previewItemCount - 1)
+            previewGridState.scrollToItem(previewGridItemIndex(page, hasSelectedPreviewPages))
+            pendingPreviewScrollPage = -1
+        }
+    }
     Box(modifier = modifier.fillMaxSize()) {
         when {
             !windowSizeClass.isExpanded -> FastScrollLazyVerticalGrid(
                 columns = GridCells.Fixed(thumbColumns),
+                state = previewGridState,
                 contentPadding = contentPadding,
                 modifier = Modifier.fillMaxSize().padding(horizontal = keylineMargin),
                 horizontalArrangement = Arrangement.spacedBy(dimensionResource(id = com.hippo.ehviewer.R.dimen.strip_item_padding)),
@@ -432,6 +455,7 @@ fun GalleryDetailContent(
             }
             else -> FastScrollLazyVerticalGrid(
                 columns = GridCells.Fixed(thumbColumns),
+                state = previewGridState,
                 contentPadding = contentPadding,
                 modifier = Modifier.fillMaxSize().padding(horizontal = keylineMargin),
                 horizontalArrangement = Arrangement.spacedBy(dimensionResource(id = com.hippo.ehviewer.R.dimen.strip_item_padding)),
@@ -549,6 +573,8 @@ fun GalleryDetailContent(
 
 private fun formatPreviewDownloadTime(time: Long): String =
     DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(time))
+
+private fun previewGridItemIndex(page: Int, hasSelectionBar: Boolean) = page + 2 + if (hasSelectionBar) 1 else 0
 
 @Composable
 private fun PreviewClearSelectionFloatingButton(

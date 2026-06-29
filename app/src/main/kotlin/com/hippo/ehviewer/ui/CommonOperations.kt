@@ -266,7 +266,8 @@ suspend fun removeFromFavorites(galleryInfo: GalleryInfo) = doModifyFavorites(
 )
 
 context(_: DestinationsNavigator)
-fun navToReader(info: BaseGalleryInfo, page: Int = -1) = navToReader(ReaderScreenArgs.Gallery(info, page))
+fun navToReader(info: BaseGalleryInfo, page: Int = -1, trackPreviewReturn: Boolean = false) =
+    navToReader(ReaderScreenArgs.Gallery(info, page, trackPreviewReturn))
 
 context(_: DestinationsNavigator)
 fun navToReader(path: String) = navToReader(ReaderScreenArgs.Archive(path))

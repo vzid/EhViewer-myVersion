@@ -85,6 +85,7 @@ import com.hippo.ehviewer.gallery.unblock
 import com.hippo.ehviewer.gallery.useArchivePageLoader
 import com.hippo.ehviewer.gallery.useEhPageLoader
 import com.hippo.ehviewer.ui.MainActivity
+import com.hippo.ehviewer.ui.PreviewReaderReturnPosition
 import com.hippo.ehviewer.ui.Screen
 import com.hippo.ehviewer.ui.theme.EhTheme
 import com.hippo.ehviewer.ui.tools.DialogState
@@ -115,7 +116,11 @@ import okio.Path.Companion.toPath
 @Serializable
 sealed interface ReaderScreenArgs {
     @Serializable
-    data class Gallery(val info: BaseGalleryInfo, val page: Int) : ReaderScreenArgs
+    data class Gallery(
+        val info: BaseGalleryInfo,
+        val page: Int,
+        val trackPreviewReturn: Boolean = false,
+    ) : ReaderScreenArgs
 
     @Serializable
     data class Archive(val path: String) : ReaderScreenArgs
@@ -175,9 +180,10 @@ fun AnimatedVisibilityScope.ReaderScreen(args: ReaderScreenArgs, navigator: Dest
             }
             is Either.Right -> {
                 val loader = result.value
-                val info = (args as? ReaderScreenArgs.Gallery)?.info
+                val galleryArgs = args as? ReaderScreenArgs.Gallery
+                val info = galleryArgs?.info
                 key(loader) {
-                    ReaderScreen(loader, info)
+                    ReaderScreen(loader, info, galleryArgs?.trackPreviewReturn == true)
                 }
             }
         }
@@ -186,7 +192,7 @@ fun AnimatedVisibilityScope.ReaderScreen(args: ReaderScreenArgs, navigator: Dest
 
 @Composable
 context(activity: MainActivity, _: SnackbarHostState, _: DialogState, _: CoroutineScope, _: DestinationsNavigator)
-fun ReaderScreen(pageLoader: PageLoader, info: BaseGalleryInfo?) {
+fun ReaderScreen(pageLoader: PageLoader, info: BaseGalleryInfo?, trackPreviewReturn: Boolean = false) {
     LaunchedEffect(Unit) {
         val orientation = activity.requestedOrientation
         Settings.orientationMode.valueFlow()
@@ -227,6 +233,12 @@ fun ReaderScreen(pageLoader: PageLoader, info: BaseGalleryInfo?) {
     val lazyListState = rememberLazyListState(LazyLayoutCacheWindow(SCROLL_FRACTION, SCROLL_FRACTION), pageLoader.startPage)
     val pagerState = rememberPagerState(pageLoader.startPage) { pageLoader.size }
     val syncState = rememberSliderPagerDoubleSyncState(lazyListState, pagerState, pageLoader)
+    LaunchedEffect(trackPreviewReturn, info?.gid, pageLoader, syncState) {
+        if (trackPreviewReturn && info != null) {
+            snapshotFlow { syncState.sliderValue - 1 }
+                .collect { page -> PreviewReaderReturnPosition.update(info.gid, page.coerceIn(0, pageLoader.size - 1)) }
+        }
+    }
     var appbarVisible by remember { mutableStateOf(false) }
     val selectedPreviewPagesFlow = remember(info?.gid) {
         info?.let { EhDB.getPreviewSelectionPagesFlow(it.gid) } ?: flowOf(emptyList())
