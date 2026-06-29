@@ -12,6 +12,8 @@ import com.ehviewer.core.database.dao.FilterDao
 import com.ehviewer.core.database.dao.GalleryDao
 import com.ehviewer.core.database.dao.HistoryDao
 import com.ehviewer.core.database.dao.LocalFavoritesDao
+import com.ehviewer.core.database.dao.PreviewDownloadHistoryDao
+import com.ehviewer.core.database.dao.PreviewSelectionDao
 import com.ehviewer.core.database.dao.ProgressDao
 import com.ehviewer.core.database.dao.QuickSearchDao
 import com.ehviewer.core.database.dao.SearchDao
@@ -25,6 +27,8 @@ import com.ehviewer.core.database.model.GalleryEntity
 import com.ehviewer.core.database.model.GalleryFtsEntity
 import com.ehviewer.core.database.model.HistoryInfo
 import com.ehviewer.core.database.model.LocalFavoriteInfo
+import com.ehviewer.core.database.model.PreviewDownloadHistoryInfo
+import com.ehviewer.core.database.model.PreviewSelectionInfo
 import com.ehviewer.core.database.model.ProgressInfo
 import com.ehviewer.core.database.model.QuickSearch
 import com.ehviewer.core.database.model.Search
@@ -33,9 +37,9 @@ import com.ehviewer.core.database.model.Search
     entities = [
         GalleryEntity::class, DownloadLabel::class, DownloadEntity::class, DownloadDirname::class, DownloadArtist::class,
         Filter::class, HistoryInfo::class, LocalFavoriteInfo::class, ProgressInfo::class, QuickSearch::class,
-        GalleryFtsEntity::class,
+        GalleryFtsEntity::class, PreviewSelectionInfo::class, PreviewDownloadHistoryInfo::class,
     ],
-    version = 23,
+    version = 24,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 4, to = 5, spec = Schema4to5::class),
@@ -56,6 +60,7 @@ import com.ehviewer.core.database.model.Search
         AutoMigration(from = 20, to = 21, spec = Schema20to21::class),
         AutoMigration(from = 21, to = 22, spec = Schema21to22::class),
         AutoMigration(from = 22, to = 23),
+        AutoMigration(from = 23, to = 24),
     ],
 )
 @TypeConverters(FilterModeConverter::class)
@@ -68,6 +73,8 @@ abstract class EhDatabase : RoomDatabase() {
     abstract fun filterDao(): FilterDao
     abstract fun historyDao(): HistoryDao
     abstract fun localFavoritesDao(): LocalFavoritesDao
+    abstract fun previewDownloadHistoryDao(): PreviewDownloadHistoryDao
+    abstract fun previewSelectionDao(): PreviewSelectionDao
     abstract fun progressDao(): ProgressDao
     abstract fun quickSearchDao(): QuickSearchDao
 }

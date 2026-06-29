@@ -530,6 +530,9 @@
     <string name="preview_download_hd_progress">正在下载高清 %1$d/%2$d…</string>
     <string name="preview_download_hd_done">已保存 %1$d 张高清图，%2$d 张失败</string>
     <string name="preview_download_hd_none">请先选择预览图</string>
+    <string name="preview_toggle_tap_mode">切换缩略图点击模式</string>
+    <string name="preview_reader_select_page">选择当前页</string>
+    <string name="preview_download_history_notice">该本已于 %s 下载过</string>
     <string name="pref_category_general">通用</string>
     <string name="pref_fullscreen">全屏</string>
     <string name="pref_page_transitions">页面过渡动画</string>

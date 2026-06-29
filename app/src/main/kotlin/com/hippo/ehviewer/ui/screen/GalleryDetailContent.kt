@@ -29,6 +29,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.FolderZip
+import androidx.compose.material.icons.filled.OpenInFull
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -41,11 +42,11 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -168,6 +169,8 @@ import moe.tarsin.coroutines.runSwallowingWithUI
 import moe.tarsin.navigate
 import moe.tarsin.snackbar
 import moe.tarsin.string
+import java.text.DateFormat
+import java.util.Date
 
 @Composable
 context(_: CoroutineScope, _: DestinationsNavigator, _: DialogState, _: MainActivity, _: SnackbarHostState, _: SharedTransitionScope, _: TransitionsVisibilityScope)
@@ -202,36 +205,51 @@ fun GalleryDetailContent(
         DownloadInfo.STATE_FAILED -> stringResource(R.string.download_state_failed)
         else -> error("Invalid DownloadState!!!")
     }
-    var previewSelectionMode by rememberSaveable { mutableStateOf(false) }
-    val selectedPreviewPages = remember { mutableStateListOf<Int>() }
+    var previewTapSelectMode by rememberSaveable(galleryInfo.gid) { mutableStateOf(false) }
+    val selectedPreviewPages by rememberInVM(galleryInfo.gid) {
+        EhDB.getPreviewSelectionPagesFlow(galleryInfo.gid)
+    }.collectAsState(emptyList())
+    val hasSelectedPreviewPages = selectedPreviewPages.isNotEmpty()
+    LaunchedEffect(galleryInfo.gid) {
+        val history = withIOContext { EhDB.getPreviewDownloadHistory(galleryInfo.gid) }
+        if (history != null) {
+            snackbar(string(R.string.preview_download_history_notice, formatPreviewDownloadTime(history.time)))
+        }
+    }
+    LaunchedEffect(hasSelectedPreviewPages) {
+        if (!hasSelectedPreviewPages) {
+            previewTapSelectMode = false
+        }
+    }
     fun exitPreviewSelection() {
-        previewSelectionMode = false
-        selectedPreviewPages.clear()
+        previewTapSelectMode = false
+        launchIO { EhDB.clearPreviewSelection(galleryInfo.gid) }
     }
     fun togglePreviewSelection(index: Int) {
-        if (index in selectedPreviewPages) {
-            selectedPreviewPages.remove(index)
-            if (selectedPreviewPages.isEmpty()) {
-                previewSelectionMode = false
+        val selected = index in selectedPreviewPages
+        launchIO {
+            if (selected) {
+                EhDB.removePreviewSelectionPage(galleryInfo.gid, index)
+            } else {
+                EhDB.putPreviewSelectionPage(galleryInfo.gid, index)
             }
-        } else {
-            selectedPreviewPages.add(index)
         }
     }
     fun enterPreviewSelection(index: Int) {
-        previewSelectionMode = true
-        selectedPreviewPages.clear()
-        selectedPreviewPages.add(index)
+        previewTapSelectMode = true
+        if (index !in selectedPreviewPages) {
+            launchIO { EhDB.putPreviewSelectionPage(galleryInfo.gid, index) }
+        }
     }
     fun onPreviewClick(index: Int) {
-        if (previewSelectionMode) {
+        if (previewTapSelectMode) {
             togglePreviewSelection(index)
         } else {
             galleryDetail?.let { navToReader(it.galleryInfo, index) }
         }
     }
     fun onPreviewLongClick(index: Int) {
-        if (previewSelectionMode) {
+        if (previewTapSelectMode) {
             togglePreviewSelection(index)
         } else {
             enterPreviewSelection(index)
@@ -245,10 +263,14 @@ fun GalleryDetailContent(
         }
         val indices = selectedPreviewPages.sorted()
         launchIO {
-            with(contextOf<MainActivity>()) {
+            val (success, failed) = with(contextOf<MainActivity>()) {
                 downloadSelectedPreviewPagesHd(detail, indices)
             }
-            withUIContext { exitPreviewSelection() }
+            if (success == indices.size && failed == 0) {
+                EhDB.putPreviewDownloadHistory(detail.galleryInfo, indices)
+                EhDB.clearPreviewSelection(detail.gid)
+                withUIContext { previewTapSelectMode = false }
+            }
         }
     }
     fun onReadButtonClick() {
@@ -372,7 +394,7 @@ fun GalleryDetailContent(
                     }
                 }
                 if (galleryDetail != null && previews != null) {
-                    if (previewSelectionMode) {
+                    if (hasSelectedPreviewPages) {
                         item(
                             key = "preview_selection_bar",
                             span = { GridItemSpan(maxCurrentLineSpan) },
@@ -459,7 +481,7 @@ fun GalleryDetailContent(
                     }
                 }
                 if (galleryDetail != null && previews != null) {
-                    if (previewSelectionMode) {
+                    if (hasSelectedPreviewPages) {
                         item(
                             key = "preview_selection_bar",
                             span = { GridItemSpan(maxCurrentLineSpan) },
@@ -481,17 +503,27 @@ fun GalleryDetailContent(
                 }
             }
         }
-        if (previewSelectionMode && galleryDetail != null && previews != null) {
-            PreviewDownloadFloatingButton(
-                onClick = ::onDownloadSelectedPreviewsClick,
+        if (hasSelectedPreviewPages && galleryDetail != null && previews != null) {
+            Column(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .snackBarPadding()
                     .padding(16.dp),
-            )
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                PreviewTapModeFloatingButton(
+                    selectMode = previewTapSelectMode,
+                    onClick = { previewTapSelectMode = !previewTapSelectMode },
+                )
+                PreviewDownloadFloatingButton(onClick = ::onDownloadSelectedPreviewsClick)
+            }
         }
     }
 }
+
+private fun formatPreviewDownloadTime(time: Long): String =
+    DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(time))
 
 @Composable
 private fun PreviewSelectionBar(
@@ -528,6 +560,23 @@ private fun PreviewDownloadFloatingButton(
         contentColor = MaterialTheme.colorScheme.onPrimary,
     ) {
         Icon(imageVector = Icons.Default.Download, contentDescription = label)
+    }
+}
+
+@Composable
+private fun PreviewTapModeFloatingButton(
+    selectMode: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val label = stringResource(R.string.preview_toggle_tap_mode)
+    FloatingActionButton(
+        onClick = onClick,
+        modifier = modifier,
+        containerColor = if (selectMode) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.surfaceVariant,
+        contentColor = if (selectMode) MaterialTheme.colorScheme.onSecondary else MaterialTheme.colorScheme.onSurfaceVariant,
+    ) {
+        Icon(imageVector = Icons.Default.OpenInFull, contentDescription = label)
     }
 }
 

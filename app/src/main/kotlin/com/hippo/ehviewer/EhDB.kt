@@ -31,6 +31,8 @@ import com.ehviewer.core.database.model.Filter
 import com.ehviewer.core.database.model.GalleryEntity
 import com.ehviewer.core.database.model.HistoryInfo
 import com.ehviewer.core.database.model.LocalFavoriteInfo
+import com.ehviewer.core.database.model.PreviewDownloadHistoryInfo
+import com.ehviewer.core.database.model.PreviewSelectionInfo
 import com.ehviewer.core.database.model.ProgressInfo
 import com.ehviewer.core.database.model.QuickSearch
 import com.ehviewer.core.database.roomDb
@@ -63,6 +65,23 @@ object EhDB {
     suspend fun getReadProgress(gid: Long) = db.progressDao().getPage(gid)
     suspend fun putReadProgress(gid: Long, page: Int) = db.progressDao().upsert(ProgressInfo(gid, page))
     suspend fun clearProgressInfo() = db.progressDao().deleteAll()
+
+    fun getPreviewSelectionPagesFlow(gid: Long) = db.previewSelectionDao().pagesFlow(gid)
+    suspend fun getPreviewSelectionPages(gid: Long) = db.previewSelectionDao().pages(gid)
+    suspend fun putPreviewSelectionPage(gid: Long, page: Int) = db.previewSelectionDao().upsert(PreviewSelectionInfo(gid, page))
+    suspend fun removePreviewSelectionPage(gid: Long, page: Int) = db.previewSelectionDao().delete(gid, page)
+    suspend fun clearPreviewSelection(gid: Long) = db.previewSelectionDao().deleteByGid(gid)
+    suspend fun putPreviewDownloadHistory(galleryInfo: GalleryInfo, pages: List<Int>) {
+        db.previewDownloadHistoryDao().upsert(
+            PreviewDownloadHistoryInfo(
+                gid = galleryInfo.gid,
+                title = galleryInfo.title?.ifBlank { null } ?: galleryInfo.titleJpn.orEmpty(),
+                pages = pages.joinToString(","),
+            ),
+        )
+    }
+    suspend fun getPreviewDownloadHistory(gid: Long) = db.previewDownloadHistoryDao().load(gid)
+    suspend fun getAllPreviewDownloadHistory() = db.previewDownloadHistoryDao().list()
 
     suspend fun getAllDownloadInfo() = db.downloadsDao().joinList().onEach {
         if (it.state == DownloadInfo.STATE_WAIT || it.state == DownloadInfo.STATE_DOWNLOAD) {

@@ -68,7 +68,7 @@ A modern EhViewer fork dedicated to high-performance
 with [Material Design 3](https://m3.material.io/)
 and [Dynamic Color](https://m3.material.io/styles/color/dynamic-color/overview) Support
 
-Gallery detail previews can be long-pressed to select pages and save reader-sized images from the bottom-right download button without forcing original-image downloads.
+Gallery detail previews can be long-pressed to select pages and save reader-sized images from the bottom-right download button without forcing original-image downloads. Selected pages stay saved until every chosen image downloads successfully, can be adjusted from the reader checkbox, and galleries downloaded this way show a downloaded-at prompt on later visits.
 
 # Download
 

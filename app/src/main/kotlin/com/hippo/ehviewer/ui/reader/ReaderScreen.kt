@@ -15,18 +15,22 @@ import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.layout.LazyLayoutCacheWindow
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.BottomSheetDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularWavyProgressIndicator
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -34,6 +38,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -50,6 +55,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.keepScreenOn
 import androidx.compose.ui.res.colorResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.dp
 import arrow.core.Either
 import arrow.core.Either.Companion.catch
 import arrow.core.raise.ensure
@@ -94,6 +103,7 @@ import eu.kanade.tachiyomi.ui.reader.setting.ReadingModeType
 import kotlin.coroutines.resume
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.sample
@@ -218,6 +228,10 @@ fun ReaderScreen(pageLoader: PageLoader, info: BaseGalleryInfo?) {
     val pagerState = rememberPagerState(pageLoader.startPage) { pageLoader.size }
     val syncState = rememberSliderPagerDoubleSyncState(lazyListState, pagerState, pageLoader)
     var appbarVisible by remember { mutableStateOf(false) }
+    val selectedPreviewPagesFlow = remember(info?.gid) {
+        info?.let { EhDB.getPreviewSelectionPagesFlow(it.gid) } ?: flowOf(emptyList())
+    }
+    val selectedPreviewPages by selectedPreviewPagesFlow.collectAsState(emptyList())
     val isWebtoon by rememberUpdatedState(ReadingModeType.isWebtoon(readingMode))
     val focusRequester = remember { FocusRequester() }
     Box(
@@ -338,6 +352,25 @@ fun ReaderScreen(pageLoader: PageLoader, info: BaseGalleryInfo?) {
                 )
             }
         }
+        if (info != null && pageLoader.size > 0 && !appbarVisible) {
+            val pageIndex = (syncState.sliderValue - 1).coerceIn(0, pageLoader.size - 1)
+            ReaderPreviewSelectionCheckbox(
+                checked = pageIndex in selectedPreviewPages,
+                onCheckedChange = { checked ->
+                    launchIO {
+                        if (checked) {
+                            EhDB.putPreviewSelectionPage(info.gid, pageIndex)
+                        } else {
+                            EhDB.removePreviewSelectionPage(info.gid, pageIndex)
+                        }
+                    }
+                },
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .navigationBarsPadding()
+                    .padding(bottom = if (showPageNumber) 28.dp else 0.dp),
+            )
+        }
         ReaderAppBars(
             visible = appbarVisible,
             title = pageLoader.title,
@@ -371,6 +404,28 @@ fun ReaderScreen(pageLoader: PageLoader, info: BaseGalleryInfo?) {
                     }
                 }
             },
+        )
+    }
+}
+
+@Composable
+private fun ReaderPreviewSelectionCheckbox(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val label = stringResource(R.string.preview_reader_select_page)
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.88f),
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        tonalElevation = 2.dp,
+    ) {
+        Checkbox(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            modifier = Modifier.semantics { contentDescription = label },
         )
     }
 }
