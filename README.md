@@ -68,7 +68,7 @@ A modern EhViewer fork dedicated to high-performance
 with [Material Design 3](https://m3.material.io/)
 and [Dynamic Color](https://m3.material.io/styles/color/dynamic-color/overview) Support
 
-Gallery detail previews can be long-pressed to select pages and save reader-sized images from the bottom-right download button without forcing original-image downloads. Selected pages stay saved until every chosen image downloads successfully, can be adjusted from the reader checkbox, and galleries downloaded this way show a downloaded-at prompt on later visits. Tapping the selected-page download button again stops the current batch; retrying skips already saved images by filename and continues missing or newly selected pages.
+Gallery detail previews can be long-pressed to select pages and save reader-sized images from the bottom-right download button without forcing original-image downloads. The bottom-left clear-selection icon button clears all selections for the current gallery. Selected pages stay saved until every chosen image downloads successfully and can be adjusted from the reader checkbox. Selected-image downloads keep running after leaving the gallery detail page, show progress and speed in the notification shade, and post a completion result. Retrying skips images already saved by filename and continues missing or newly selected pages. Images are saved under `Pictures/EhViewer/{artist or group or unknow}-{title}/` and named with page numbers padded to the total page count, such as `001.png`. Galleries downloaded this way show a downloaded-at prompt on later visits. Tapping the selected-page download button again stops the current batch and keeps the selection.
 
 # Download
 

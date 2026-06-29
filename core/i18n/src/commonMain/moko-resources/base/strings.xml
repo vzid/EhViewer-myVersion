@@ -639,8 +639,17 @@
     <string name="preview_download_hd_done">Saved %1$d HD image(s), skipped %2$d existing, %3$d failed</string>
     <string name="preview_download_hd_cancelled">HD download stopped; selection kept</string>
     <string name="preview_download_hd_none">Select preview thumbnails first</string>
+    <string name="preview_download_hd_busy">Another selected-image download is already running</string>
+    <string name="preview_clear_all_selection">Clear selections</string>
     <string name="preview_toggle_tap_mode">Toggle thumbnail tap mode</string>
     <string name="preview_reader_select_page">Select this page</string>
     <string name="preview_download_history_notice">Downloaded this gallery at %s</string>
+    <string name="preview_download_notification_channel">Selected image downloads</string>
+    <string name="preview_download_notification_title">Downloading %s</string>
+    <string name="preview_download_notification_progress">%1$d/%2$d, %3$s/s</string>
+    <string name="preview_download_notification_done">Selected image download complete: saved %1$d, skipped %2$d, failed %3$d</string>
+    <string name="preview_download_notification_stopped">Selected image download stopped</string>
+    <string name="preview_download_notification_failed">Selected image download ended with errors: saved %1$d, skipped %2$d, failed %3$d</string>
+    <string name="preview_download_notification_failed_unknown">Selected image download failed</string>
     <!-- Tachiyomi Reader End-->
 </resources>

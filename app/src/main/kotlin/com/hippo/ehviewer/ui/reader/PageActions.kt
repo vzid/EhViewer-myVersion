@@ -42,6 +42,12 @@ enum class SavePageToGalleryResult {
     Failed,
 }
 
+data class GalleryImageSaveTarget(
+    val relativePath: String,
+    val filename: String,
+    val mimeType: String,
+)
+
 private val commonImageExtensions = arrayOf("jpg", "jpeg", "png", "gif", "webp")
 
 private fun PageLoader.getImageFilenameCandidates(index: Int): List<String> =
@@ -49,26 +55,51 @@ private fun PageLoader.getImageFilenameCandidates(index: Int): List<String> =
         FileUtils.sanitizeFilename("$title - ${index + 1}.${it}")
     }
 
-private fun Context.galleryImageExists(filename: String): Boolean {
+private fun String.normalizedMediaStorePath() = replace('\\', '/').trim('/')
+
+private fun publicRelativePathFile(relativePath: String): File {
+    val normalized = relativePath.normalizedMediaStorePath()
+    val pictures = Environment.DIRECTORY_PICTURES.normalizedMediaStorePath()
+    val publicPictures = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
+    val child = normalized.removePrefix("$pictures/").takeIf { it != normalized }
+    return if (child == null || child.isEmpty()) publicPictures else File(publicPictures, child)
+}
+
+private fun Context.galleryImageExists(filename: String, relativePath: String? = null): Boolean {
     val existsInMediaStore = runCatching {
         val selection = if (isAtLeastQ) {
             "${MediaStore.MediaColumns.DISPLAY_NAME} = ? AND ${MediaStore.MediaColumns.IS_PENDING} = 0"
         } else {
             "${MediaStore.MediaColumns.DISPLAY_NAME} = ?"
         }
+        val projection = if (isAtLeastQ && relativePath != null) {
+            arrayOf(MediaStore.Images.Media._ID, MediaStore.MediaColumns.RELATIVE_PATH)
+        } else {
+            arrayOf(MediaStore.Images.Media._ID)
+        }
         contentResolver.query(
             MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-            arrayOf(MediaStore.Images.Media._ID),
+            projection,
             selection,
             arrayOf(filename),
             null,
-        )?.use { it.moveToFirst() } == true
+        )?.use { cursor ->
+            if (relativePath == null) {
+                cursor.moveToFirst()
+            } else {
+                val pathColumn = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.RELATIVE_PATH)
+                val expectedPath = relativePath.normalizedMediaStorePath()
+                generateSequence { if (cursor.moveToNext()) cursor else null }
+                    .any { it.getString(pathColumn)?.normalizedMediaStorePath() == expectedPath }
+            }
+        } == true
     }.getOrDefault(false)
     if (existsInMediaStore || isAtLeastQ) {
         return existsInMediaStore
     }
-    val dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
-    return File(File(dir, AppConfig.APP_DIRNAME), filename).isFile
+    val path = relativePath?.let(::publicRelativePathFile)
+        ?: File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES), AppConfig.APP_DIRNAME)
+    return File(path, filename).isFile
 }
 
 context(ctx: Context, loader: PageLoader)
@@ -76,12 +107,24 @@ fun pageImageExistsInGallery(index: Int) = loader.getImageFilenameCandidates(ind
     ctx.galleryImageExists(it)
 }
 
+context(ctx: Context)
+fun pageImageExistsInGallery(target: GalleryImageSaveTarget) =
+    ctx.galleryImageExists(target.filename, target.relativePath)
+
 context(ctx: Context, loader: PageLoader)
 fun savePageToGalleryIfMissing(index: Int): SavePageToGalleryResult {
     if (pageImageExistsInGallery(index)) {
         return SavePageToGalleryResult.Skipped
     }
     return if (savePageToGallery(index)) SavePageToGalleryResult.Saved else SavePageToGalleryResult.Failed
+}
+
+context(ctx: Context, loader: PageLoader)
+fun savePageToGalleryIfMissing(index: Int, target: GalleryImageSaveTarget): SavePageToGalleryResult {
+    if (pageImageExistsInGallery(target)) {
+        return SavePageToGalleryResult.Skipped
+    }
+    return if (savePageToGallery(index, target)) SavePageToGalleryResult.Saved else SavePageToGalleryResult.Failed
 }
 
 context(loader: PageLoader, ctx: Context)
@@ -138,23 +181,32 @@ fun savePageToGallery(index: Int): Boolean {
     val filename = loader.getImageFilename(index) ?: return false
     val extension = FileUtils.getExtensionFromFilename(filename)
     val mimeType = MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension) ?: "image/jpeg"
+    val target = GalleryImageSaveTarget(
+        relativePath = Environment.DIRECTORY_PICTURES + File.separator + AppConfig.APP_DIRNAME,
+        filename = filename,
+        mimeType = mimeType,
+    )
+    return savePageToGallery(index, target)
+}
+
+context(ctx: Context, loader: PageLoader)
+private fun savePageToGallery(index: Int, target: GalleryImageSaveTarget): Boolean {
     val values = ContentValues()
     val realPath: String
-    values.put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
+    values.put(MediaStore.MediaColumns.DISPLAY_NAME, target.filename)
     values.put(MediaStore.MediaColumns.DATE_ADDED, Clock.System.now().epochSeconds)
-    values.put(MediaStore.MediaColumns.MIME_TYPE, mimeType)
+    values.put(MediaStore.MediaColumns.MIME_TYPE, target.mimeType)
     if (isAtLeastQ) {
-        realPath = Environment.DIRECTORY_PICTURES + File.separator + AppConfig.APP_DIRNAME
+        realPath = target.relativePath
         values.put(MediaStore.MediaColumns.RELATIVE_PATH, realPath)
         values.put(MediaStore.MediaColumns.IS_PENDING, 1)
     } else {
-        val dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
-        val path = File(dir, AppConfig.APP_DIRNAME)
+        val path = publicRelativePathFile(target.relativePath)
         realPath = path.toString()
         if (!FileUtils.ensureDirectory(path)) {
             return false
         }
-        values.put(MediaStore.MediaColumns.DATA, realPath + File.separator + filename)
+        values.put(MediaStore.MediaColumns.DATA, realPath + File.separator + target.filename)
     }
     val imageUri = ctx.contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
         ?: return false

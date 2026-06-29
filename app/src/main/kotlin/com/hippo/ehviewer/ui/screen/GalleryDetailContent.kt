@@ -1,5 +1,6 @@
 package com.hippo.ehviewer.ui.screen
 
+import android.Manifest
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
@@ -28,6 +29,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.FolderZip
 import androidx.compose.material.icons.filled.OpenInFull
@@ -107,6 +109,8 @@ import com.ehviewer.core.util.async
 import com.ehviewer.core.util.launch
 import com.ehviewer.core.util.launchIO
 import com.ehviewer.core.util.launchUI
+import com.ehviewer.core.util.isAtLeastQ
+import com.ehviewer.core.util.isAtLeastT
 import com.ehviewer.core.util.logcat
 import com.ehviewer.core.util.withIOContext
 import com.ehviewer.core.util.withUIContext
@@ -157,9 +161,9 @@ import com.hippo.ehviewer.util.FavouriteStatusRouter
 import com.hippo.ehviewer.util.addTextToClipboard
 import com.hippo.ehviewer.util.bgWork
 import com.hippo.ehviewer.util.displayString
+import com.hippo.ehviewer.util.requestPermission
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import io.ktor.http.encodeURLParameter
-import kotlinx.coroutines.CancellationException
 import kotlin.coroutines.resume
 import kotlin.math.roundToInt
 import kotlinx.coroutines.CoroutineScope
@@ -212,8 +216,8 @@ fun GalleryDetailContent(
         EhDB.getPreviewSelectionPagesFlow(galleryInfo.gid)
     }.collectAsState(emptyList())
     val hasSelectedPreviewPages = selectedPreviewPages.isNotEmpty()
-    var previewDownloadJob by remember(galleryInfo.gid) { mutableStateOf<Job?>(null) }
-    val previewDownloadInProgress = previewDownloadJob?.isActive == true
+    val previewDownloadState by PreviewDownloadManager.state.collectAsState()
+    val previewDownloadInProgress = previewDownloadState.running && previewDownloadState.gid == galleryInfo.gid
     LaunchedEffect(galleryInfo.gid) {
         val history = withIOContext { EhDB.getPreviewDownloadHistory(galleryInfo.gid) }
         if (history != null) {
@@ -261,7 +265,7 @@ fun GalleryDetailContent(
     }
     fun onDownloadSelectedPreviewsClick() {
         if (previewDownloadInProgress) {
-            previewDownloadJob?.cancel()
+            PreviewDownloadManager.stop(galleryInfo.gid)
             return
         }
         val detail = galleryDetail ?: return
@@ -270,24 +274,19 @@ fun GalleryDetailContent(
             return
         }
         val indices = selectedPreviewPages.sorted()
-        val job = launch(Dispatchers.IO, start = CoroutineStart.LAZY) {
-            try {
-                val result = with(contextOf<MainActivity>()) {
-                    downloadSelectedPreviewPagesHd(detail, indices)
-                }
-                if (result.completed) {
-                    EhDB.putPreviewDownloadHistory(detail.galleryInfo, indices)
-                    EhDB.clearPreviewSelection(detail.gid)
-                    withUIContext { previewTapSelectMode = false }
-                }
-            } catch (_: CancellationException) {
-                snackbar(string(R.string.preview_download_hd_cancelled))
-            } finally {
-                withUIContext { previewDownloadJob = null }
+        launchIO {
+            val storageGranted = isAtLeastQ || requestPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+            if (!storageGranted) {
+                snackbar(string(R.string.permission_denied))
+                return@launchIO
+            }
+            if (isAtLeastT) {
+                requestPermission(Manifest.permission.POST_NOTIFICATIONS)
+            }
+            if (!PreviewDownloadManager.start(detail, indices, detail.previewList)) {
+                snackbar(string(R.string.preview_download_hd_busy))
             }
         }
-        previewDownloadJob = job
-        job.start()
     }
     fun onReadButtonClick() {
         if (galleryDetail != null || downloadState != DownloadInfo.STATE_INVALID) {
@@ -520,6 +519,13 @@ fun GalleryDetailContent(
             }
         }
         if (hasSelectedPreviewPages && galleryDetail != null && previews != null) {
+            PreviewClearSelectionFloatingButton(
+                onClick = ::exitPreviewSelection,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .snackBarPadding()
+                    .padding(16.dp),
+            )
             Column(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
@@ -543,6 +549,24 @@ fun GalleryDetailContent(
 
 private fun formatPreviewDownloadTime(time: Long): String =
     DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(time))
+
+@Composable
+private fun PreviewClearSelectionFloatingButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    FloatingActionButton(
+        onClick = onClick,
+        modifier = modifier,
+        containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+        contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+    ) {
+        Icon(
+            imageVector = Icons.Default.Delete,
+            contentDescription = stringResource(R.string.preview_clear_all_selection),
+        )
+    }
+}
 
 @Composable
 private fun PreviewSelectionBar(
