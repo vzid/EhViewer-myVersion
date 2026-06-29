@@ -43,9 +43,11 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -197,6 +199,55 @@ fun GalleryDetailContent(
         DownloadInfo.STATE_FAILED -> stringResource(R.string.download_state_failed)
         else -> error("Invalid DownloadState!!!")
     }
+    var previewSelectionMode by rememberSaveable { mutableStateOf(false) }
+    val selectedPreviewPages = remember { mutableStateListOf<Int>() }
+    fun exitPreviewSelection() {
+        previewSelectionMode = false
+        selectedPreviewPages.clear()
+    }
+    fun togglePreviewSelection(index: Int) {
+        if (index in selectedPreviewPages) {
+            selectedPreviewPages.remove(index)
+            if (selectedPreviewPages.isEmpty()) {
+                previewSelectionMode = false
+            }
+        } else {
+            selectedPreviewPages.add(index)
+        }
+    }
+    fun enterPreviewSelection(index: Int) {
+        previewSelectionMode = true
+        selectedPreviewPages.clear()
+        selectedPreviewPages.add(index)
+    }
+    fun onPreviewClick(index: Int) {
+        if (previewSelectionMode) {
+            togglePreviewSelection(index)
+        } else {
+            galleryDetail?.let { navToReader(it.galleryInfo, index) }
+        }
+    }
+    fun onPreviewLongClick(index: Int) {
+        if (previewSelectionMode) {
+            togglePreviewSelection(index)
+        } else {
+            enterPreviewSelection(index)
+        }
+    }
+    fun onDownloadSelectedPreviewsClick() {
+        val detail = galleryDetail ?: return
+        if (selectedPreviewPages.isEmpty()) {
+            launchUI { snackbar(string(R.string.preview_download_hd_none)) }
+            return
+        }
+        val indices = selectedPreviewPages.sorted()
+        launchIO {
+            with(contextOf<MainActivity>()) {
+                downloadSelectedPreviewPagesHd(detail, indices)
+            }
+            withUIContext { exitPreviewSelection() }
+        }
+    }
     fun onReadButtonClick() {
         if (galleryDetail != null || downloadState != DownloadInfo.STATE_INVALID) {
             navToReader(galleryInfo.findBaseInfo(), startPage)
@@ -317,7 +368,26 @@ fun GalleryDetailContent(
                 }
             }
             if (galleryDetail != null && previews != null) {
-                galleryPreview(galleryDetail, previews) { navToReader(galleryDetail.galleryInfo, it) }
+                if (previewSelectionMode) {
+                    item(
+                        key = "preview_selection_bar",
+                        span = { GridItemSpan(maxCurrentLineSpan) },
+                        contentType = "preview_selection_bar",
+                    ) {
+                        PreviewSelectionBar(
+                            selectedCount = selectedPreviewPages.size,
+                            onDownloadClick = ::onDownloadSelectedPreviewsClick,
+                            onCancelClick = ::exitPreviewSelection,
+                        )
+                    }
+                }
+                galleryPreview(
+                    galleryDetail,
+                    previews,
+                    selectedPreviewPages,
+                    ::onPreviewClick,
+                    ::onPreviewLongClick,
+                )
             }
         }
         else -> FastScrollLazyVerticalGrid(
@@ -386,8 +456,53 @@ fun GalleryDetailContent(
                 }
             }
             if (galleryDetail != null && previews != null) {
-                galleryPreview(galleryDetail, previews) { navToReader(galleryDetail.galleryInfo, it) }
+                if (previewSelectionMode) {
+                    item(
+                        key = "preview_selection_bar",
+                        span = { GridItemSpan(maxCurrentLineSpan) },
+                        contentType = "preview_selection_bar",
+                    ) {
+                        PreviewSelectionBar(
+                            selectedCount = selectedPreviewPages.size,
+                            onDownloadClick = ::onDownloadSelectedPreviewsClick,
+                            onCancelClick = ::exitPreviewSelection,
+                        )
+                    }
+                }
+                galleryPreview(
+                    galleryDetail,
+                    previews,
+                    selectedPreviewPages,
+                    ::onPreviewClick,
+                    ::onPreviewLongClick,
+                )
             }
+        }
+    }
+}
+
+@Composable
+private fun PreviewSelectionBar(
+    selectedCount: Int,
+    onDownloadClick: () -> Unit,
+    onCancelClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = stringResource(R.string.preview_select_count, selectedCount),
+            modifier = Modifier.weight(1f),
+        )
+        FilledTonalButton(onClick = onDownloadClick) {
+            Text(text = stringResource(R.string.preview_download_hd))
+        }
+        Button(onClick = onCancelClick) {
+            Text(text = stringResource(R.string.preview_select_cancel))
         }
     }
 }
@@ -831,7 +946,13 @@ private fun GalleryDetail.collectPreviewItems() = rememberInVM(previewList) {
 }.collectAsLazyPagingItems()
 
 context(_: Context)
-private fun LazyGridScope.galleryPreview(detail: GalleryDetail, data: LazyPagingItems<GalleryPreview>, onClick: (Int) -> Unit) {
+private fun LazyGridScope.galleryPreview(
+    detail: GalleryDetail,
+    data: LazyPagingItems<GalleryPreview>,
+    selectedPages: List<Int>,
+    onClick: (Int) -> Unit,
+    onLongClick: (Int) -> Unit,
+) {
     val isV2Thumb = detail.previewList.first() is V2GalleryPreview
     items(
         count = data.itemCount,
@@ -839,7 +960,13 @@ private fun LazyGridScope.galleryPreview(detail: GalleryDetail, data: LazyPaging
         contentType = { "preview" },
     ) { index ->
         val item = data[index]
-        EhPreviewItem(item, index) { onClick(index) }
+        EhPreviewItem(
+            galleryPreview = item,
+            position = index,
+            onClick = { onClick(index) },
+            selected = index in selectedPages,
+            onLongClick = { onLongClick(index) },
+        )
         PrefetchAround(data, index, if (isV2Thumb) 20 else 6) { imageRequest(it) }
     }
 }

@@ -78,15 +78,21 @@ abstract class PageLoader(val scope: CoroutineScope, val info: GalleryInfo?, sta
 
     private val prevIndex = AtomicInt(-1)
 
-    fun retryPage(index: Int, orgImg: Boolean = false) {
+    fun retryPage(index: Int, orgImg: Boolean = false, useDownloadOriginSetting: Boolean = true) {
+        cancelRequest(index)
         notifyPageWait(index)
         lock.write { cache.remove(index) }
-        onRequest(index, true, orgImg)
+        onRequest(index, true, orgImg, useDownloadOriginSetting)
     }
 
     protected abstract fun prefetchPages(pages: List<Int>, bounds: IntRange)
 
-    protected abstract fun onRequest(index: Int, force: Boolean = false, orgImg: Boolean = false)
+    protected abstract fun onRequest(
+        index: Int,
+        force: Boolean = false,
+        orgImg: Boolean = false,
+        useDownloadOriginSetting: Boolean = true,
+    )
 
     fun notifyPageWait(index: Int) {
         pages[index].reset()

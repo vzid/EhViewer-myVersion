@@ -18,6 +18,7 @@
 * 对话框中的下拉菜单显示错位
 * HTTP 状态错误显示为“什么都没有找到”
 * 某些老设备无法通过 Cloudflare 验证 [#2794](https://github.com/FooIbar/EhViewer/issues/2794)
+* 选择画廊预览图下载时不再因强制原图下载导致全部失败
 * 杂项修复
 
 

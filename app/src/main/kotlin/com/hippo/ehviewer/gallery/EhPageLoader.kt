@@ -35,7 +35,8 @@ suspend inline fun <T> useEhPageLoader(
 
                 override fun prefetchPages(pages: List<Int>, bounds: IntRange) = queen.preloadPages(pages, bounds)
 
-                override fun onRequest(index: Int, force: Boolean, orgImg: Boolean) = queen.request(index, force, orgImg)
+                override fun onRequest(index: Int, force: Boolean, orgImg: Boolean, useDownloadOriginSetting: Boolean) =
+                    queen.request(index, force, orgImg, useDownloadOriginSetting)
             },
         ).apply {
             val listener = object : OnSpiderListener {

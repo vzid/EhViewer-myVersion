@@ -68,6 +68,8 @@ A modern EhViewer fork dedicated to high-performance
 with [Material Design 3](https://m3.material.io/)
 and [Dynamic Color](https://m3.material.io/styles/color/dynamic-color/overview) Support
 
+Gallery detail previews can be long-pressed to select pages and save reader-sized images without forcing original-image downloads.
+
 # Download
 
 | Flavor      | Minimum Android Version | Notes                          |

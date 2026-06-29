@@ -524,6 +524,12 @@
     <string name="action_copy">复制</string>
     <string name="action_save">保存</string>
     <string name="action_save_to">保存到…</string>
+    <string name="preview_select_count">已选 %d 张</string>
+    <string name="preview_download_hd">下载高清</string>
+    <string name="preview_select_cancel">取消</string>
+    <string name="preview_download_hd_progress">正在下载高清 %1$d/%2$d…</string>
+    <string name="preview_download_hd_done">已保存 %1$d 张高清图，%2$d 张失败</string>
+    <string name="preview_download_hd_none">请先选择预览图</string>
     <string name="pref_category_general">通用</string>
     <string name="pref_fullscreen">全屏</string>
     <string name="pref_page_transitions">页面过渡动画</string>

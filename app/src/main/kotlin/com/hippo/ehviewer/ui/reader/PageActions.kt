@@ -33,6 +33,7 @@ import kotlin.time.Clock
 import moe.tarsin.coroutines.runSuspendCatching
 import moe.tarsin.snackbar
 import moe.tarsin.string
+import okio.Path
 import splitties.systemservices.clipboardManager
 
 context(loader: PageLoader, ctx: Context)
@@ -84,55 +85,65 @@ suspend fun copy(page: Page) {
     }
 }
 
+context(ctx: Context, loader: PageLoader)
+fun savePageToGallery(index: Int): Boolean {
+    val filename = loader.getImageFilename(index) ?: return false
+    val extension = FileUtils.getExtensionFromFilename(filename)
+    val mimeType = MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension) ?: "image/jpeg"
+    val values = ContentValues()
+    val realPath: String
+    values.put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
+    values.put(MediaStore.MediaColumns.DATE_ADDED, Clock.System.now().epochSeconds)
+    values.put(MediaStore.MediaColumns.MIME_TYPE, mimeType)
+    if (isAtLeastQ) {
+        realPath = Environment.DIRECTORY_PICTURES + File.separator + AppConfig.APP_DIRNAME
+        values.put(MediaStore.MediaColumns.RELATIVE_PATH, realPath)
+        values.put(MediaStore.MediaColumns.IS_PENDING, 1)
+    } else {
+        val dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
+        val path = File(dir, AppConfig.APP_DIRNAME)
+        realPath = path.toString()
+        if (!FileUtils.ensureDirectory(path)) {
+            return false
+        }
+        values.put(MediaStore.MediaColumns.DATA, realPath + File.separator + filename)
+    }
+    val imageUri = ctx.contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
+        ?: return false
+    if (!loader.save(index, imageUri.toOkioPath())) {
+        try {
+            ctx.contentResolver.delete(imageUri, null, null)
+        } catch (e: Exception) {
+            logcat("SavePage", e)
+        }
+        return false
+    }
+    if (isAtLeastQ) {
+        val contentValues = ContentValues()
+        contentValues.put(MediaStore.MediaColumns.IS_PENDING, 0)
+        ctx.contentResolver.update(imageUri, contentValues, null, null)
+    }
+    return true
+}
+
 context(_: SnackbarHostState, ctx: Context, loader: PageLoader)
 suspend fun save(page: Page) {
     val granted = isAtLeastQ || requestPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)
     val cannotSave = string(R.string.error_cant_save_image)
     if (granted) {
-        val filename = loader.getImageFilename(page.index)
-        if (filename == null) {
+        if (!savePageToGallery(page.index)) {
             snackbar(cannotSave)
             return
         }
+        val filename = loader.getImageFilename(page.index)
         val extension = FileUtils.getExtensionFromFilename(filename)
-        val mimeType = MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension) ?: "image/jpeg"
-        val values = ContentValues()
-        val realPath: String
-        values.put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
-        values.put(MediaStore.MediaColumns.DATE_ADDED, Clock.System.now().epochSeconds)
-        values.put(MediaStore.MediaColumns.MIME_TYPE, mimeType)
-        if (isAtLeastQ) {
-            realPath = Environment.DIRECTORY_PICTURES + File.separator + AppConfig.APP_DIRNAME
-            values.put(MediaStore.MediaColumns.RELATIVE_PATH, realPath)
-            values.put(MediaStore.MediaColumns.IS_PENDING, 1)
+        val realPath = if (isAtLeastQ) {
+            Environment.DIRECTORY_PICTURES + File.separator + AppConfig.APP_DIRNAME
         } else {
-            val dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
-            val path = File(dir, AppConfig.APP_DIRNAME)
-            realPath = path.toString()
-            if (!FileUtils.ensureDirectory(path)) {
-                snackbar(cannotSave)
-                return
-            }
-            values.put(MediaStore.MediaColumns.DATA, realPath + File.separator + filename)
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES).toString() +
+                File.separator + AppConfig.APP_DIRNAME
         }
-        val imageUri = ctx.contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
-        if (imageUri != null) {
-            if (!loader.save(page.index, imageUri.toOkioPath())) {
-                try {
-                    ctx.contentResolver.delete(imageUri, null, null)
-                } catch (e: Exception) {
-                    logcat("SavePage", e)
-                }
-                snackbar(cannotSave)
-            } else if (isAtLeastQ) {
-                val contentValues = ContentValues()
-                contentValues.put(MediaStore.MediaColumns.IS_PENDING, 0)
-                ctx.contentResolver.update(imageUri, contentValues, null, null)
-            }
-            snackbar(string(R.string.image_saved, realPath + File.separator + filename))
-        } else {
-            snackbar(cannotSave)
-        }
+        snackbar(string(R.string.image_saved, realPath + File.separator + filename))
     } else {
         snackbar(string(R.string.permission_denied))
     }
@@ -150,7 +161,7 @@ suspend fun saveTo(page: Page) {
     page.runSuspendCatching {
         val uri = awaitActivityResult(ActivityResultContracts.CreateDocument(mimeType), filename)
         if (uri != null) {
-            loader.save(index, uri.toOkioPath())
+            loader.save(page.index, uri.toOkioPath())
             snackbar(string(R.string.image_saved, uri.displayPath))
         }
     }.onFailure {

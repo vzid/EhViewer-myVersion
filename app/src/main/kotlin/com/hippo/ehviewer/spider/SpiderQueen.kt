@@ -279,7 +279,7 @@ class SpiderQueen private constructor(val galleryInfo: GalleryInfo) : CoroutineS
         mWorkerScope.updateRAList(pages, pair)
     }
 
-    fun request(index: Int, force: Boolean, orgImg: Boolean = false) {
+    fun request(index: Int, force: Boolean, orgImg: Boolean = false, useDownloadOriginSetting: Boolean = true) {
         // Get page state
         val state = getPageState(index)
 
@@ -288,7 +288,7 @@ class SpiderQueen private constructor(val galleryInfo: GalleryInfo) : CoroutineS
             // Update state to none at once
             updatePageState(index, STATE_NONE)
         }
-        mWorkerScope.launch(index, force, orgImg)
+        mWorkerScope.launch(index, force, orgImg, useDownloadOriginSetting)
     }
 
     fun save(index: Int, file: Path): Boolean {
@@ -494,7 +494,12 @@ class SpiderQueen private constructor(val galleryInfo: GalleryInfo) : CoroutineS
             }
         }
 
-        private fun doLaunchDownloadJob(index: Int, force: Boolean, orgImg: Boolean = false) {
+        private fun doLaunchDownloadJob(
+            index: Int,
+            force: Boolean,
+            orgImg: Boolean = false,
+            useDownloadOriginSetting: Boolean = true,
+        ) {
             val currentJob = jobs[index]
             val skipHath = force && !orgImg && currentJob?.isActive == true
             if (force) currentJob?.cancel(CancellationException(FORCE_RETRY))
@@ -502,7 +507,7 @@ class SpiderQueen private constructor(val galleryInfo: GalleryInfo) : CoroutineS
                 jobs[index] = launch {
                     runCatching {
                         semaphore.withPermit {
-                            doInJob(index, force, orgImg, skipHath)
+                            doInJob(index, force, orgImg, skipHath, useDownloadOriginSetting)
                         }
                     }.onFailure {
                         if (it is CancellationException) {
@@ -520,12 +525,12 @@ class SpiderQueen private constructor(val galleryInfo: GalleryInfo) : CoroutineS
             }
         }
 
-        fun launch(index: Int, force: Boolean = false, orgImg: Boolean) {
+        fun launch(index: Int, force: Boolean = false, orgImg: Boolean, useDownloadOriginSetting: Boolean) {
             check(index in 0 until size)
             val state = pageStates[index]
             if (!force && state == STATE_FINISHED) return notifyPageReady(index)
             if (!isDownloadMode) {
-                synchronized(jobs) { doLaunchDownloadJob(index, force, orgImg) }
+                synchronized(jobs) { doLaunchDownloadJob(index, force, orgImg, useDownloadOriginSetting) }
             }
             launch {
                 jobs[index]?.join()
@@ -533,7 +538,13 @@ class SpiderQueen private constructor(val galleryInfo: GalleryInfo) : CoroutineS
             }
         }
 
-        private suspend fun doInJob(index: Int, force: Boolean, orgImg: Boolean, skipHath: Boolean) {
+        private suspend fun doInJob(
+            index: Int,
+            force: Boolean,
+            orgImg: Boolean,
+            skipHath: Boolean,
+            useDownloadOriginSetting: Boolean,
+        ) {
             suspend fun getPToken(index: Int): String? {
                 if (!isReady || index !in 0 until size) return null
                 return spiderInfo.pTokenMap[index]
@@ -561,7 +572,7 @@ class SpiderQueen private constructor(val galleryInfo: GalleryInfo) : CoroutineS
             var originImageUrl: String? = null
             var error: String? = null
             var forceHtml = false
-            val original = Settings.downloadOriginImage.value || orgImg
+            val original = orgImg || (useDownloadOriginSetting && Settings.downloadOriginImage.value)
             runSuspendCatching {
                 repeat(3) { retries ->
                     var imageUrl: String? = null
