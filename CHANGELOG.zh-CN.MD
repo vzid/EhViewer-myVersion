@@ -9,6 +9,7 @@
 ### 改进
 
 * 画廊列表变化时重新显示悬浮操作按钮 [#2681](https://github.com/FooIbar/EhViewer/issues/2681)
+* 选择画廊预览图时，将高清下载入口改为右下角小悬浮按钮
 * 移除文件名中的尾随空格和点以兼容 Windows [#2727](https://github.com/FooIbar/EhViewer/issues/2727)
 * 长按画廊详情中的标签时显示标签名称 [#2769](https://github.com/FooIbar/EhViewer/issues/2769)
 * 杂项优化

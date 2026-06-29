@@ -27,12 +27,14 @@ import androidx.compose.foundation.lazy.grid.LazyGridScope
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.FolderZip
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularWavyProgressIndicator
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -98,6 +100,7 @@ import com.ehviewer.core.ui.util.TransitionsVisibilityScope
 import com.ehviewer.core.ui.util.flattenForEach
 import com.ehviewer.core.ui.util.isExpanded
 import com.ehviewer.core.ui.util.rememberInVM
+import com.ehviewer.core.ui.util.snackBarPadding
 import com.ehviewer.core.util.async
 import com.ehviewer.core.util.launch
 import com.ehviewer.core.util.launchIO
@@ -308,175 +311,184 @@ fun GalleryDetailContent(
     }
 
     val previews = galleryDetail?.collectPreviewItems()
-    when {
-        !windowSizeClass.isExpanded -> FastScrollLazyVerticalGrid(
-            columns = GridCells.Fixed(thumbColumns),
-            contentPadding = contentPadding,
-            modifier = modifier.padding(horizontal = keylineMargin),
-            horizontalArrangement = Arrangement.spacedBy(dimensionResource(id = com.hippo.ehviewer.R.dimen.strip_item_padding)),
-            verticalArrangement = Arrangement.spacedBy(dimensionResource(id = com.hippo.ehviewer.R.dimen.strip_item_padding_v)),
-        ) {
-            item(
-                key = "header",
-                span = { GridItemSpan(maxCurrentLineSpan) },
-                contentType = "header",
+    Box(modifier = modifier.fillMaxSize()) {
+        when {
+            !windowSizeClass.isExpanded -> FastScrollLazyVerticalGrid(
+                columns = GridCells.Fixed(thumbColumns),
+                contentPadding = contentPadding,
+                modifier = Modifier.fillMaxSize().padding(horizontal = keylineMargin),
+                horizontalArrangement = Arrangement.spacedBy(dimensionResource(id = com.hippo.ehviewer.R.dimen.strip_item_padding)),
+                verticalArrangement = Arrangement.spacedBy(dimensionResource(id = com.hippo.ehviewer.R.dimen.strip_item_padding_v)),
             ) {
-                GalleryDetailHeaderCard(
-                    info = galleryInfo,
-                    onInfoCardClick = ::onGalleryInfoCardClick,
-                    onUploaderChipClick = ::onUploaderChipClick.partially1(galleryInfo),
-                    onBlockUploaderIconClick = ::showFilterUploaderDialog.partially1(galleryInfo),
-                    onCategoryChipClick = ::onCategoryChipClick,
-                    modifier = Modifier.fillMaxWidth().padding(vertical = keylineMargin),
-                )
-            }
-            item(
-                key = "body",
-                span = { GridItemSpan(maxCurrentLineSpan) },
-                contentType = "body",
-            ) {
-                LocalPinnableContainer.current!!.run { remember { pin() } }
-                Column {
-                    Row {
-                        FilledTonalButton(
-                            onClick = ::onDownloadButtonClick,
-                            shapes = ButtonDefaults.shapes(),
-                            modifier = Modifier.padding(horizontal = 4.dp).weight(1F),
-                        ) {
-                            Text(text = downloadButtonText, overflow = TextOverflow.Ellipsis, maxLines = 1)
-                        }
-                        Button(
-                            onClick = ::onReadButtonClick,
-                            shapes = ButtonDefaults.shapes(),
-                            modifier = Modifier.padding(horizontal = 4.dp).weight(1F),
-                        ) {
-                            Text(text = readButtonText, overflow = TextOverflow.Ellipsis, maxLines = 1)
-                        }
-                    }
-                    if (getDetailError.isNotBlank()) {
-                        GalleryDetailErrorTip(error = getDetailError, onClick = onRetry)
-                    } else if (galleryDetail != null) {
-                        BelowHeader(galleryDetail, voteTag)
-                    } else {
-                        Box(
-                            modifier = Modifier.fillMaxSize().padding(keylineMargin),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            CircularWavyProgressIndicator()
-                        }
-                    }
-                }
-            }
-            if (galleryDetail != null && previews != null) {
-                if (previewSelectionMode) {
-                    item(
-                        key = "preview_selection_bar",
-                        span = { GridItemSpan(maxCurrentLineSpan) },
-                        contentType = "preview_selection_bar",
-                    ) {
-                        PreviewSelectionBar(
-                            selectedCount = selectedPreviewPages.size,
-                            onDownloadClick = ::onDownloadSelectedPreviewsClick,
-                            onCancelClick = ::exitPreviewSelection,
-                        )
-                    }
-                }
-                galleryPreview(
-                    galleryDetail,
-                    previews,
-                    selectedPreviewPages,
-                    ::onPreviewClick,
-                    ::onPreviewLongClick,
-                )
-            }
-        }
-        else -> FastScrollLazyVerticalGrid(
-            columns = GridCells.Fixed(thumbColumns),
-            contentPadding = contentPadding,
-            modifier = modifier.padding(horizontal = keylineMargin),
-            horizontalArrangement = Arrangement.spacedBy(dimensionResource(id = com.hippo.ehviewer.R.dimen.strip_item_padding)),
-            verticalArrangement = Arrangement.spacedBy(dimensionResource(id = com.hippo.ehviewer.R.dimen.strip_item_padding_v)),
-        ) {
-            item(
-                key = "header",
-                span = { GridItemSpan(maxCurrentLineSpan) },
-                contentType = "header",
-            ) {
-                Row(modifier = Modifier.fillMaxWidth()) {
+                item(
+                    key = "header",
+                    span = { GridItemSpan(maxCurrentLineSpan) },
+                    contentType = "header",
+                ) {
                     GalleryDetailHeaderCard(
                         info = galleryInfo,
                         onInfoCardClick = ::onGalleryInfoCardClick,
                         onUploaderChipClick = ::onUploaderChipClick.partially1(galleryInfo),
                         onBlockUploaderIconClick = ::showFilterUploaderDialog.partially1(galleryInfo),
                         onCategoryChipClick = ::onCategoryChipClick,
-                        modifier = Modifier.width(dimensionResource(id = com.hippo.ehviewer.R.dimen.gallery_detail_card_landscape_width)).padding(vertical = keylineMargin),
+                        modifier = Modifier.fillMaxWidth().padding(vertical = keylineMargin),
                     )
-                    Column(
-                        modifier = Modifier.fillMaxSize(),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                    ) {
-                        Spacer(modifier = modifier.height(16.dp))
-                        Button(
-                            onClick = ::onReadButtonClick,
-                            shapes = ButtonDefaults.shapes(),
-                            modifier = Modifier.height(56.dp).padding(horizontal = 16.dp).width(192.dp),
-                        ) {
-                            Text(text = readButtonText, overflow = TextOverflow.Ellipsis, maxLines = 1)
+                }
+                item(
+                    key = "body",
+                    span = { GridItemSpan(maxCurrentLineSpan) },
+                    contentType = "body",
+                ) {
+                    LocalPinnableContainer.current!!.run { remember { pin() } }
+                    Column {
+                        Row {
+                            FilledTonalButton(
+                                onClick = ::onDownloadButtonClick,
+                                shapes = ButtonDefaults.shapes(),
+                                modifier = Modifier.padding(horizontal = 4.dp).weight(1F),
+                            ) {
+                                Text(text = downloadButtonText, overflow = TextOverflow.Ellipsis, maxLines = 1)
+                            }
+                            Button(
+                                onClick = ::onReadButtonClick,
+                                shapes = ButtonDefaults.shapes(),
+                                modifier = Modifier.padding(horizontal = 4.dp).weight(1F),
+                            ) {
+                                Text(text = readButtonText, overflow = TextOverflow.Ellipsis, maxLines = 1)
+                            }
                         }
-                        Spacer(modifier = modifier.height(24.dp))
-                        FilledTonalButton(
-                            onClick = ::onDownloadButtonClick,
-                            shapes = ButtonDefaults.shapes(),
-                            modifier = Modifier.height(56.dp).padding(horizontal = 16.dp).width(192.dp),
-                        ) {
-                            Text(text = downloadButtonText, overflow = TextOverflow.Ellipsis, maxLines = 1)
+                        if (getDetailError.isNotBlank()) {
+                            GalleryDetailErrorTip(error = getDetailError, onClick = onRetry)
+                        } else if (galleryDetail != null) {
+                            BelowHeader(galleryDetail, voteTag)
+                        } else {
+                            Box(
+                                modifier = Modifier.fillMaxSize().padding(keylineMargin),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                CircularWavyProgressIndicator()
+                            }
                         }
                     }
                 }
+                if (galleryDetail != null && previews != null) {
+                    if (previewSelectionMode) {
+                        item(
+                            key = "preview_selection_bar",
+                            span = { GridItemSpan(maxCurrentLineSpan) },
+                            contentType = "preview_selection_bar",
+                        ) {
+                            PreviewSelectionBar(
+                                selectedCount = selectedPreviewPages.size,
+                                onCancelClick = ::exitPreviewSelection,
+                            )
+                        }
+                    }
+                    galleryPreview(
+                        galleryDetail,
+                        previews,
+                        selectedPreviewPages,
+                        ::onPreviewClick,
+                        ::onPreviewLongClick,
+                    )
+                }
             }
-            item(
-                key = "body",
-                span = { GridItemSpan(maxCurrentLineSpan) },
-                contentType = "body",
+            else -> FastScrollLazyVerticalGrid(
+                columns = GridCells.Fixed(thumbColumns),
+                contentPadding = contentPadding,
+                modifier = Modifier.fillMaxSize().padding(horizontal = keylineMargin),
+                horizontalArrangement = Arrangement.spacedBy(dimensionResource(id = com.hippo.ehviewer.R.dimen.strip_item_padding)),
+                verticalArrangement = Arrangement.spacedBy(dimensionResource(id = com.hippo.ehviewer.R.dimen.strip_item_padding_v)),
             ) {
-                LocalPinnableContainer.current!!.run { remember { pin() } }
-                Column {
-                    if (getDetailError.isNotBlank()) {
-                        GalleryDetailErrorTip(error = getDetailError, onClick = onRetry)
-                    } else if (galleryDetail != null) {
-                        BelowHeader(galleryDetail, voteTag)
-                    } else {
-                        Box(
-                            modifier = Modifier.fillMaxSize().padding(keylineMargin),
-                            contentAlignment = Alignment.Center,
+                item(
+                    key = "header",
+                    span = { GridItemSpan(maxCurrentLineSpan) },
+                    contentType = "header",
+                ) {
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        GalleryDetailHeaderCard(
+                            info = galleryInfo,
+                            onInfoCardClick = ::onGalleryInfoCardClick,
+                            onUploaderChipClick = ::onUploaderChipClick.partially1(galleryInfo),
+                            onBlockUploaderIconClick = ::showFilterUploaderDialog.partially1(galleryInfo),
+                            onCategoryChipClick = ::onCategoryChipClick,
+                            modifier = Modifier.width(dimensionResource(id = com.hippo.ehviewer.R.dimen.gallery_detail_card_landscape_width)).padding(vertical = keylineMargin),
+                        )
+                        Column(
+                            modifier = Modifier.fillMaxSize(),
+                            horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
-                            CircularWavyProgressIndicator()
+                            Spacer(modifier = modifier.height(16.dp))
+                            Button(
+                                onClick = ::onReadButtonClick,
+                                shapes = ButtonDefaults.shapes(),
+                                modifier = Modifier.height(56.dp).padding(horizontal = 16.dp).width(192.dp),
+                            ) {
+                                Text(text = readButtonText, overflow = TextOverflow.Ellipsis, maxLines = 1)
+                            }
+                            Spacer(modifier = modifier.height(24.dp))
+                            FilledTonalButton(
+                                onClick = ::onDownloadButtonClick,
+                                shapes = ButtonDefaults.shapes(),
+                                modifier = Modifier.height(56.dp).padding(horizontal = 16.dp).width(192.dp),
+                            ) {
+                                Text(text = downloadButtonText, overflow = TextOverflow.Ellipsis, maxLines = 1)
+                            }
                         }
                     }
                 }
-            }
-            if (galleryDetail != null && previews != null) {
-                if (previewSelectionMode) {
-                    item(
-                        key = "preview_selection_bar",
-                        span = { GridItemSpan(maxCurrentLineSpan) },
-                        contentType = "preview_selection_bar",
-                    ) {
-                        PreviewSelectionBar(
-                            selectedCount = selectedPreviewPages.size,
-                            onDownloadClick = ::onDownloadSelectedPreviewsClick,
-                            onCancelClick = ::exitPreviewSelection,
-                        )
+                item(
+                    key = "body",
+                    span = { GridItemSpan(maxCurrentLineSpan) },
+                    contentType = "body",
+                ) {
+                    LocalPinnableContainer.current!!.run { remember { pin() } }
+                    Column {
+                        if (getDetailError.isNotBlank()) {
+                            GalleryDetailErrorTip(error = getDetailError, onClick = onRetry)
+                        } else if (galleryDetail != null) {
+                            BelowHeader(galleryDetail, voteTag)
+                        } else {
+                            Box(
+                                modifier = Modifier.fillMaxSize().padding(keylineMargin),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                CircularWavyProgressIndicator()
+                            }
+                        }
                     }
                 }
-                galleryPreview(
-                    galleryDetail,
-                    previews,
-                    selectedPreviewPages,
-                    ::onPreviewClick,
-                    ::onPreviewLongClick,
-                )
+                if (galleryDetail != null && previews != null) {
+                    if (previewSelectionMode) {
+                        item(
+                            key = "preview_selection_bar",
+                            span = { GridItemSpan(maxCurrentLineSpan) },
+                            contentType = "preview_selection_bar",
+                        ) {
+                            PreviewSelectionBar(
+                                selectedCount = selectedPreviewPages.size,
+                                onCancelClick = ::exitPreviewSelection,
+                            )
+                        }
+                    }
+                    galleryPreview(
+                        galleryDetail,
+                        previews,
+                        selectedPreviewPages,
+                        ::onPreviewClick,
+                        ::onPreviewLongClick,
+                    )
+                }
             }
+        }
+        if (previewSelectionMode && galleryDetail != null && previews != null) {
+            PreviewDownloadFloatingButton(
+                onClick = ::onDownloadSelectedPreviewsClick,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .snackBarPadding()
+                    .padding(16.dp),
+            )
         }
     }
 }
@@ -484,7 +496,6 @@ fun GalleryDetailContent(
 @Composable
 private fun PreviewSelectionBar(
     selectedCount: Int,
-    onDownloadClick: () -> Unit,
     onCancelClick: () -> Unit,
 ) {
     Row(
@@ -498,12 +509,25 @@ private fun PreviewSelectionBar(
             text = stringResource(R.string.preview_select_count, selectedCount),
             modifier = Modifier.weight(1f),
         )
-        FilledTonalButton(onClick = onDownloadClick) {
-            Text(text = stringResource(R.string.preview_download_hd))
-        }
         Button(onClick = onCancelClick) {
             Text(text = stringResource(R.string.preview_select_cancel))
         }
+    }
+}
+
+@Composable
+private fun PreviewDownloadFloatingButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val label = stringResource(R.string.preview_download_hd)
+    FloatingActionButton(
+        onClick = onClick,
+        modifier = modifier,
+        containerColor = MaterialTheme.colorScheme.primary,
+        contentColor = MaterialTheme.colorScheme.onPrimary,
+    ) {
+        Icon(imageVector = Icons.Default.Download, contentDescription = label)
     }
 }
 
