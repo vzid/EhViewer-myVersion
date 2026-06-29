@@ -27,6 +27,7 @@ import androidx.compose.foundation.lazy.grid.LazyGridScope
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.FolderZip
 import androidx.compose.material.icons.filled.OpenInFull
@@ -158,6 +159,7 @@ import com.hippo.ehviewer.util.bgWork
 import com.hippo.ehviewer.util.displayString
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import io.ktor.http.encodeURLParameter
+import kotlinx.coroutines.CancellationException
 import kotlin.coroutines.resume
 import kotlin.math.roundToInt
 import kotlinx.coroutines.CoroutineScope
@@ -210,6 +212,8 @@ fun GalleryDetailContent(
         EhDB.getPreviewSelectionPagesFlow(galleryInfo.gid)
     }.collectAsState(emptyList())
     val hasSelectedPreviewPages = selectedPreviewPages.isNotEmpty()
+    var previewDownloadJob by remember(galleryInfo.gid) { mutableStateOf<Job?>(null) }
+    val previewDownloadInProgress = previewDownloadJob?.isActive == true
     LaunchedEffect(galleryInfo.gid) {
         val history = withIOContext { EhDB.getPreviewDownloadHistory(galleryInfo.gid) }
         if (history != null) {
@@ -256,22 +260,34 @@ fun GalleryDetailContent(
         }
     }
     fun onDownloadSelectedPreviewsClick() {
+        if (previewDownloadInProgress) {
+            previewDownloadJob?.cancel()
+            return
+        }
         val detail = galleryDetail ?: return
         if (selectedPreviewPages.isEmpty()) {
             launchUI { snackbar(string(R.string.preview_download_hd_none)) }
             return
         }
         val indices = selectedPreviewPages.sorted()
-        launchIO {
-            val (success, failed) = with(contextOf<MainActivity>()) {
-                downloadSelectedPreviewPagesHd(detail, indices)
-            }
-            if (success == indices.size && failed == 0) {
-                EhDB.putPreviewDownloadHistory(detail.galleryInfo, indices)
-                EhDB.clearPreviewSelection(detail.gid)
-                withUIContext { previewTapSelectMode = false }
+        val job = launch(Dispatchers.IO, start = CoroutineStart.LAZY) {
+            try {
+                val result = with(contextOf<MainActivity>()) {
+                    downloadSelectedPreviewPagesHd(detail, indices)
+                }
+                if (result.completed) {
+                    EhDB.putPreviewDownloadHistory(detail.galleryInfo, indices)
+                    EhDB.clearPreviewSelection(detail.gid)
+                    withUIContext { previewTapSelectMode = false }
+                }
+            } catch (_: CancellationException) {
+                snackbar(string(R.string.preview_download_hd_cancelled))
+            } finally {
+                withUIContext { previewDownloadJob = null }
             }
         }
+        previewDownloadJob = job
+        job.start()
     }
     fun onReadButtonClick() {
         if (galleryDetail != null || downloadState != DownloadInfo.STATE_INVALID) {
@@ -516,7 +532,10 @@ fun GalleryDetailContent(
                     selectMode = previewTapSelectMode,
                     onClick = { previewTapSelectMode = !previewTapSelectMode },
                 )
-                PreviewDownloadFloatingButton(onClick = ::onDownloadSelectedPreviewsClick)
+                PreviewDownloadFloatingButton(
+                    downloading = previewDownloadInProgress,
+                    onClick = ::onDownloadSelectedPreviewsClick,
+                )
             }
         }
     }
@@ -549,17 +568,21 @@ private fun PreviewSelectionBar(
 
 @Composable
 private fun PreviewDownloadFloatingButton(
+    downloading: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val label = stringResource(R.string.preview_download_hd)
+    val label = stringResource(if (downloading) R.string.preview_download_hd_stop else R.string.preview_download_hd)
     FloatingActionButton(
         onClick = onClick,
         modifier = modifier,
-        containerColor = MaterialTheme.colorScheme.primary,
-        contentColor = MaterialTheme.colorScheme.onPrimary,
+        containerColor = if (downloading) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.primary,
+        contentColor = if (downloading) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onPrimary,
     ) {
-        Icon(imageVector = Icons.Default.Download, contentDescription = label)
+        Icon(
+            imageVector = if (downloading) Icons.Default.Close else Icons.Default.Download,
+            contentDescription = label,
+        )
     }
 }
 

@@ -633,9 +633,11 @@
     <string name="show_blocked_image">Show blocked image</string>
     <string name="preview_select_count">%d selected</string>
     <string name="preview_download_hd">Download HD</string>
+    <string name="preview_download_hd_stop">Stop HD download</string>
     <string name="preview_select_cancel">Cancel</string>
     <string name="preview_download_hd_progress">Downloading HD %1$d/%2$d…</string>
-    <string name="preview_download_hd_done">Saved %1$d HD image(s), %2$d failed</string>
+    <string name="preview_download_hd_done">Saved %1$d HD image(s), skipped %2$d existing, %3$d failed</string>
+    <string name="preview_download_hd_cancelled">HD download stopped; selection kept</string>
     <string name="preview_download_hd_none">Select preview thumbnails first</string>
     <string name="preview_toggle_tap_mode">Toggle thumbnail tap mode</string>
     <string name="preview_reader_select_page">Select this page</string>

@@ -36,6 +36,54 @@ import moe.tarsin.string
 import okio.Path
 import splitties.systemservices.clipboardManager
 
+enum class SavePageToGalleryResult {
+    Saved,
+    Skipped,
+    Failed,
+}
+
+private val commonImageExtensions = arrayOf("jpg", "jpeg", "png", "gif", "webp")
+
+private fun PageLoader.getImageFilenameCandidates(index: Int): List<String> =
+    getImageFilename(index)?.let(::listOf) ?: commonImageExtensions.map {
+        FileUtils.sanitizeFilename("$title - ${index + 1}.${it}")
+    }
+
+private fun Context.galleryImageExists(filename: String): Boolean {
+    val existsInMediaStore = runCatching {
+        val selection = if (isAtLeastQ) {
+            "${MediaStore.MediaColumns.DISPLAY_NAME} = ? AND ${MediaStore.MediaColumns.IS_PENDING} = 0"
+        } else {
+            "${MediaStore.MediaColumns.DISPLAY_NAME} = ?"
+        }
+        contentResolver.query(
+            MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+            arrayOf(MediaStore.Images.Media._ID),
+            selection,
+            arrayOf(filename),
+            null,
+        )?.use { it.moveToFirst() } == true
+    }.getOrDefault(false)
+    if (existsInMediaStore || isAtLeastQ) {
+        return existsInMediaStore
+    }
+    val dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
+    return File(File(dir, AppConfig.APP_DIRNAME), filename).isFile
+}
+
+context(ctx: Context, loader: PageLoader)
+fun pageImageExistsInGallery(index: Int) = loader.getImageFilenameCandidates(index).any {
+    ctx.galleryImageExists(it)
+}
+
+context(ctx: Context, loader: PageLoader)
+fun savePageToGalleryIfMissing(index: Int): SavePageToGalleryResult {
+    if (pageImageExistsInGallery(index)) {
+        return SavePageToGalleryResult.Skipped
+    }
+    return if (savePageToGallery(index)) SavePageToGalleryResult.Saved else SavePageToGalleryResult.Failed
+}
+
 context(loader: PageLoader, ctx: Context)
 private fun provideImage(index: Int): Uri? {
     val dir = AppConfig.externalTempDir ?: return null
